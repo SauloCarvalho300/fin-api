@@ -3,6 +3,7 @@ import express from 'express'
 
 import { verifyExistsAccount } from './middlewares/verify-exists-account'
 import { Customer, Statement } from './types/customer'
+import { getBalance } from './utils/get-balance'
 
 const app = express()
 
@@ -12,6 +13,7 @@ app.use(express.json())
 export const customers: Customer[] = []
 
 const minAmountOfDeposit = 0.1
+const minAmountOfWithdraw = 0.1
 
 // ROTA: Cria um novo cliente
 app.post('/account', (request, response) => {
@@ -81,6 +83,38 @@ app.post('/deposit/:cpf', verifyExistsAccount, (request, response) => {
   return response.json({
     message: `Deposit worth ${amount} successfully made`,
   })
+})
+
+// Rota: Saca um valor de um cliente
+app.post('/withdraw/:cpf', verifyExistsAccount, (request, response) => {
+  const { customer } = request
+  const { description, amount } = request.body as {
+    description: string
+    amount: number
+  }
+
+  if (amount < minAmountOfWithdraw) {
+    return response
+      .status(400)
+      .json({ message: 'Amount must be greater them the minimum amount' })
+  }
+
+  const balance = getBalance(customer.statement)
+
+  if (balance < amount) {
+    return response.status(400).json({ message: 'Insufficient funds!' })
+  }
+
+  const statement: Statement = {
+    description,
+    amount,
+    type: 'debit',
+    createdAT: new Date(),
+  }
+
+  customer.statement.push(statement)
+
+  return response.json({ message: 'Successfully withdraw ' })
 })
 
 export default app
