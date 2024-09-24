@@ -14,6 +14,8 @@ export const customers: Customer[] = []
 
 const minAmountOfDeposit = 0.1
 const minAmountOfWithdraw = 0.1
+const minAmountOfPix = 0.1
+const maxAmountOfPix = 5000
 
 // ROTA: Cria um novo cliente
 app.post('/account', (request, response) => {
@@ -115,6 +117,82 @@ app.post('/withdraw/:cpf', verifyExistsAccount, (request, response) => {
   customer.statement.push(statement)
 
   return response.json({ message: 'Successfully withdraw ' })
+})
+
+// Rota: Busca o saldo atual do cliente
+app.get('/balance/:cpf', verifyExistsAccount, (request, response) => {
+  const { customer } = request
+
+  // Busca o saldo atual de acordo com o extrato do cliente
+  const balance = getBalance(customer.statement)
+
+  return response.json({ data: { balance } })
+})
+
+// Rota: Realiza um pix de uma conta para outra
+app.post('/pix/:cpf', verifyExistsAccount, (request, response) => {
+  const { customer: senderCustomer } = request
+  const { target, amount, description } = request.body as {
+    target: string
+    amount: number
+    description: string
+  }
+
+  // Verifica se o CPF do remetente é igual do destinatário
+  if (senderCustomer.cpf === target) {
+    return response
+      .status(400)
+      .json({ message: 'You cannot send a pix to yourself' })
+  }
+
+  // Verifica se o alvo do pix(cliente) existe
+  const targetCustomer = customers.find((customer) => customer.cpf === target)
+
+  if (!targetCustomer) {
+    return response.status(400).json({ message: 'Tarhet customer not found' })
+  }
+
+  // Verifica se o pix é maior que o limite mínimo
+  if (amount < minAmountOfPix) {
+    return response
+      .status(400)
+      .json({ message: 'Amount must be greater then the minimum amount' })
+  }
+
+  if (amount > maxAmountOfPix) {
+    return response.status(400).json({
+      message: 'Amount must be less then or equal to the maximum amount',
+    })
+  }
+
+  // Verifica se o saldo do remetente tem saldo suficiente
+  const senderBalance = getBalance(senderCustomer.statement)
+
+  if (senderBalance < amount) {
+    return response.status(400).json({ message: 'insufficient funds' })
+  }
+
+  // Cria a transação do remetente
+  const statementSender: Statement = {
+    description,
+    amount,
+    type: 'debit',
+    createdAT: new Date(),
+  }
+
+  // Criar a trasanção do destinatário
+  const statementTarget: Statement = {
+    description: `Pix recebido de ${senderCustomer.name}`,
+    amount,
+    type: 'credit',
+    createdAT: new Date(),
+  }
+
+  // Adiciona as trasações aos respectivos clientes
+  senderCustomer.statement.push(statementSender)
+  targetCustomer.statement.push(statementTarget)
+
+  return response.json({ message: 'Pix sent sucessfully' })
 })
 
 export default app
