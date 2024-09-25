@@ -47,6 +47,44 @@ app.post('/account', (request, response) => {
   })
 })
 
+// Rota: Atualizar dados do cliente
+app.put('/account/:cpf', verifyExistsAccount, (request, response) => {
+  const { customer } = request
+  const { name } = request.body as {
+    name: string
+  }
+
+  // Reatribui o valor do nome com o valor vindo do body
+  customer.name = name
+
+  return response.json({ message: 'Account updated ' })
+})
+
+// Rota: Deleta um cliente
+app.delete('/account/:cpf', verifyExistsAccount, (request, response) => {
+  const { customer } = request
+
+  const balance = getBalance(customer.statement)
+
+  if (balance > 0) {
+    return response
+      .status(400)
+      .json({ message: 'You cannot delete an account having positive funds' })
+  }
+
+  if (balance < 0) {
+    return response
+      .status(400)
+      .json({ message: 'You cannot delete an account having negative funds' })
+  }
+
+  const customerIndex = customers.findIndex((c) => c.cpf === customer.cpf)
+
+  if (customerIndex !== -1) customers.splice(customerIndex, 1)
+
+  return response.json({ message: 'Account deleted' })
+})
+
 // Rota: Busca os dados de um cliente
 app.get('/account/:cpf', verifyExistsAccount, (request, response) => {
   const { customer } = request
@@ -57,6 +95,24 @@ app.get('/account/:cpf', verifyExistsAccount, (request, response) => {
 app.get('/statement/:cpf', verifyExistsAccount, (request, response) => {
   const { customer } = request
   return response.json({ data: customer.statement })
+})
+
+// Rota: Busca o extrato de um cliente pela data
+app.get('/statement/:cpf/date', verifyExistsAccount, (request, response) => {
+  const { customer } = request
+  const { date } = request.query as { date: string }
+
+  // Formata a hora da data passada para meia noite
+  const formatedDate = new Date(date + ' 00:00')
+
+  // Filtra os extratos pela data, ignorando o tempo
+  const statements = customer.statement.filter(
+    (statement) =>
+      new Date(statement.createdAT).toDateString() ===
+      new Date(formatedDate).toDateString(),
+  )
+
+  return response.json({ data: statements })
 })
 
 // Rota: Deposita um valor a um cliente
